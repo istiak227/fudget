@@ -24,7 +24,13 @@ import {
   pickBackupFile,
   shareBackupFile,
 } from "./src/services/backup";
-import { AppData, MonthlyEntry, PersonLedger, SavingsAccount } from "./src/types";
+import {
+  AppData,
+  AppLanguage,
+  MonthlyEntry,
+  PersonLedger,
+  SavingsAccount,
+} from "./src/types";
 import {
   formatDateLabel,
   formatIsoDate,
@@ -55,14 +61,255 @@ type BaseFormState = {
 type EntryFormState = BaseFormState;
 type SavingsFormState = BaseFormState & { accountId: string };
 type PersonFormState = BaseFormState & { personId: string };
+type RenameTarget =
+  | { type: "savings"; id: string; value: string }
+  | { type: "loans" | "lending"; id: string; value: string }
+  | null;
 
-const NAV_ITEMS: Array<{ key: TabKey; label: string; icon: IconName }> = [
-  { key: "monthly", label: "Monthly", icon: "calendar-month-outline" },
-  { key: "savings", label: "Savings", icon: "bank-outline" },
-  { key: "loans", label: "Loans", icon: "hand-coin-outline" },
-  { key: "lending", label: "Lending", icon: "cash-fast" },
-  { key: "settings", label: "Settings", icon: "cog-outline" },
+const NAV_ITEMS: Array<{ key: TabKey; labelKey: string; icon: IconName }> = [
+  { key: "monthly", labelKey: "navMonthly", icon: "calendar-month-outline" },
+  { key: "savings", labelKey: "navSavings", icon: "bank-outline" },
+  { key: "loans", labelKey: "navLoans", icon: "hand-coin-outline" },
+  { key: "lending", labelKey: "navLending", icon: "cash-fast" },
+  { key: "settings", labelKey: "navSettings", icon: "cog-outline" },
 ];
+
+const COPY: Record<AppLanguage, Record<string, string>> = {
+  en: {
+    navMonthly: "Monthly",
+    navSavings: "Savings",
+    navLoans: "Loans",
+    navLending: "Lending",
+    navSettings: "Settings",
+    menuTitle: "Menu",
+    languageTitle: "Language",
+    languageEnglish: "English",
+    languageBangla: "Bangla",
+    debitIncome: "Debits / Income",
+    creditExpense: "Credits / Expenses",
+    leftThisMonth: "Left This Month",
+    addDebit: "Add Debit",
+    addCredit: "Add Credit",
+    incomeMoneyIn: "Income or money in",
+    expenseMoneyOut: "Expense or money out",
+    insights: "Insights",
+    addExpenseInsight: "Add expense items to see group insights.",
+    savingsTitle: "Savings",
+    addSavingsAccount: "Add savings account",
+    create: "Create",
+    savingsEmpty:
+      "Create your first savings account to start tracking bank, cash, or other savings.",
+    savingsDebitTitle: "Debits",
+    savingsCreditTitle: "Credits",
+    savingsAddMoney: "Add money",
+    savingsWithdrawMoney: "Withdraw money",
+    savingsNoAdded: "No savings added yet.",
+    savingsNoWithdrawals: "No withdrawals yet.",
+    loansTitle: "Loans",
+    lendingTitle: "Lending",
+    outstandingLoan: "Outstanding Loan",
+    outstandingLending: "Outstanding Lending",
+    addBorrowedFrom: "Add person you borrowed from",
+    addLentTo: "Add person you lent to",
+    loansEmpty: "Loans are optional, but you can track them here whenever you need.",
+    lendingEmpty: "Lending is optional too, and works the same simple way.",
+    addLoan: "Add Loan",
+    addRepayment: "Add Repayment",
+    addLentAmount: "Add Lent Amount",
+    addReturnedAmount: "Add Returned Amount",
+    recordAmount: "Record amount",
+    recordReturn: "Record return",
+    amounts: "Amounts",
+    repayments: "Repayments",
+    nothingRecorded: "Nothing recorded yet.",
+    noRepayments: "No repayments yet.",
+    settingsTitle: "Settings",
+    groupsTitle: "Groups",
+    addNewGroup: "Add a new group",
+    add: "Add",
+    backupTitle: "Backup",
+    backupText:
+      "Create a JSON backup file and save it anywhere you want. Later, pick that file to restore your data.",
+    backupNow: "Back Up Now",
+    restoreBackup: "Restore Backup",
+    backupIdle: "Create a JSON backup file and save it anywhere you like.",
+    backupReady: "Backup ready",
+    backupReadyMessage: "Your JSON backup file is ready to save or share.",
+    backupFailed: "Backup failed",
+    backupFailedMessage: "The JSON backup file could not be created.",
+    restoreAsk: "Restore backup?",
+    restore: "Restore",
+    restoreComplete: "Restore complete",
+    restoreCompleteMessage: "The JSON backup has been restored to this device.",
+    restoreFailed: "Restore failed",
+    restoreFailedMessage: "The selected JSON backup file could not be restored.",
+    groupHelp:
+      "Use groups to organize monthly debit and credit items. Entries without a group stay in Other.",
+    defaultLabel: "Default",
+    debitIncomeModal: "Debit / Income",
+    creditExpenseModal: "Credit / Expense",
+    savingsCreditModal: "Savings Credit",
+    savingsDebitModal: "Savings Debit",
+    amountModal: "Amount",
+    repaymentModal: "Repayment",
+    fillNameAmount: "Fill in the item name and amount. Date is optional.",
+    name: "Name",
+    amount: "Amount",
+    group: "Group",
+    date: "Date",
+    forExampleSalary: "For example Salary or Transport",
+    tapToChooseDate: "Tap to choose a date",
+    today: "Today",
+    clear: "Clear",
+    cancel: "Cancel",
+    save: "Save",
+    jumpToMonth: "Jump to month",
+    close: "Close",
+    noIncomeSaved: "No income saved for this month yet.",
+    noExpensesSaved: "No expenses saved for this month yet.",
+    deleteItem: "Delete item?",
+    deleteMonthItem: "This entry will be removed from the month.",
+    deleteSavingsItem: "This savings item will be removed.",
+    deleteLedgerItem: "This ledger item will be removed.",
+    delete: "Delete",
+    removeGroup: "Remove group?",
+    alreadyThere: "Already there",
+    groupExists: "This group already exists.",
+    rename: "Rename",
+    accountName: "Account name",
+    personName: "Person name",
+    renameAccount: "Rename account",
+    renamePerson: "Rename person",
+    deleteAccount: "Delete account?",
+    deleteAccountBody: "This savings account and all its entries will be removed.",
+    deletePerson: "Delete person?",
+    deletePersonBody: "This person and all related entries will be removed.",
+    missingDetails: "Missing details",
+    addNameAmount: "Please add a name and amount.",
+    pickAccountNameAmount: "Pick an account and add a name and amount.",
+    pickPersonNameAmount: "Pick a person and add a name and amount.",
+    saveIssue: "Save issue",
+    saveIssueBody: "Your latest changes could not be written right now.",
+    preparingBook: "Preparing your budget book...",
+  },
+  bn: {
+    navMonthly: "মাসিক",
+    navSavings: "সঞ্চয়",
+    navLoans: "ঋণ",
+    navLending: "ধার",
+    navSettings: "সেটিংস",
+    menuTitle: "মেনু",
+    languageTitle: "ভাষা",
+    languageEnglish: "English",
+    languageBangla: "বাংলা",
+    debitIncome: "ডেবিট / আয়",
+    creditExpense: "ক্রেডিট / খরচ",
+    leftThisMonth: "এই মাসে বাকি",
+    addDebit: "ডেবিট যোগ করুন",
+    addCredit: "ক্রেডিট যোগ করুন",
+    incomeMoneyIn: "আয় বা টাকা এসেছে",
+    expenseMoneyOut: "খরচ বা টাকা গেছে",
+    insights: "ইনসাইট",
+    addExpenseInsight: "খরচ যোগ করলে গ্রুপভিত্তিক ইনসাইট দেখা যাবে।",
+    savingsTitle: "সঞ্চয়",
+    addSavingsAccount: "সঞ্চয়ের নাম যোগ করুন",
+    create: "তৈরি করুন",
+    savingsEmpty:
+      "ব্যাংক, ক্যাশ বা অন্য সঞ্চয় ট্র্যাক করতে প্রথম সঞ্চয় অ্যাকাউন্ট তৈরি করুন।",
+    savingsDebitTitle: "ডেবিট",
+    savingsCreditTitle: "ক্রেডিট",
+    savingsAddMoney: "টাকা যোগ",
+    savingsWithdrawMoney: "টাকা উত্তোলন",
+    savingsNoAdded: "এখনও সঞ্চয় যোগ করা হয়নি।",
+    savingsNoWithdrawals: "এখনও উত্তোলন করা হয়নি।",
+    loansTitle: "ঋণ",
+    lendingTitle: "ধার",
+    outstandingLoan: "মোট বাকি ঋণ",
+    outstandingLending: "মোট বাকি ধার",
+    addBorrowedFrom: "যার কাছ থেকে ঋণ নিয়েছেন",
+    addLentTo: "যাকে ধার দিয়েছেন",
+    loansEmpty: "ঋণ অপশনাল, প্রয়োজন হলে এখানে ট্র্যাক করতে পারবেন।",
+    lendingEmpty: "ধারও অপশনাল, একই সহজভাবে এখানে ট্র্যাক করতে পারবেন।",
+    addLoan: "ঋণ যোগ করুন",
+    addRepayment: "পরিশোধ যোগ করুন",
+    addLentAmount: "ধার দেওয়া যোগ করুন",
+    addReturnedAmount: "ফেরত পাওয়া যোগ করুন",
+    recordAmount: "পরিমাণ লিখুন",
+    recordReturn: "ফেরত লিখুন",
+    amounts: "পরিমাণ",
+    repayments: "পরিশোধ",
+    nothingRecorded: "এখনও কিছু যোগ করা হয়নি।",
+    noRepayments: "এখনও কোনো পরিশোধ নেই।",
+    settingsTitle: "সেটিংস",
+    groupsTitle: "গ্রুপ",
+    addNewGroup: "নতুন গ্রুপ যোগ করুন",
+    add: "যোগ করুন",
+    backupTitle: "ব্যাকআপ",
+    backupText:
+      "একটি JSON ব্যাকআপ ফাইল তৈরি করুন এবং যেখানে খুশি সেভ করুন। পরে সেই ফাইল থেকে ডাটা রিস্টোর করতে পারবেন।",
+    backupNow: "এখন ব্যাকআপ",
+    restoreBackup: "ব্যাকআপ রিস্টোর",
+    backupIdle: "একটি JSON ব্যাকআপ ফাইল তৈরি করে যেকোনো জায়গায় সেভ করুন।",
+    backupReady: "ব্যাকআপ প্রস্তুত",
+    backupReadyMessage: "আপনার JSON ব্যাকআপ ফাইল সেভ বা শেয়ার করার জন্য প্রস্তুত।",
+    backupFailed: "ব্যাকআপ ব্যর্থ",
+    backupFailedMessage: "JSON ব্যাকআপ ফাইল তৈরি করা যায়নি।",
+    restoreAsk: "ব্যাকআপ রিস্টোর করবেন?",
+    restore: "রিস্টোর",
+    restoreComplete: "রিস্টোর সম্পন্ন",
+    restoreCompleteMessage: "JSON ব্যাকআপ এই ডিভাইসে রিস্টোর হয়েছে।",
+    restoreFailed: "রিস্টোর ব্যর্থ",
+    restoreFailedMessage: "নির্বাচিত JSON ব্যাকআপ ফাইল রিস্টোর করা যায়নি।",
+    groupHelp:
+      "মাসিক ডেবিট ও ক্রেডিট আইটেম গ্রুপে সাজাতে পারবেন। যেগুলোর গ্রুপ নেই সেগুলো Other এ থাকবে।",
+    defaultLabel: "ডিফল্ট",
+    debitIncomeModal: "ডেবিট / আয়",
+    creditExpenseModal: "ক্রেডিট / খরচ",
+    savingsCreditModal: "সঞ্চয় ক্রেডিট",
+    savingsDebitModal: "সঞ্চয় ডেবিট",
+    amountModal: "পরিমাণ",
+    repaymentModal: "পরিশোধ",
+    fillNameAmount: "আইটেমের নাম ও পরিমাণ দিন। তারিখ অপশনাল।",
+    name: "নাম",
+    amount: "পরিমাণ",
+    group: "গ্রুপ",
+    date: "তারিখ",
+    forExampleSalary: "যেমন Salary বা Transport",
+    tapToChooseDate: "তারিখ বাছাই করতে চাপুন",
+    today: "আজ",
+    clear: "মুছুন",
+    cancel: "বাতিল",
+    save: "সেভ",
+    jumpToMonth: "মাসে যান",
+    close: "বন্ধ",
+    noIncomeSaved: "এই মাসে এখনও কোনো আয় সেভ করা হয়নি।",
+    noExpensesSaved: "এই মাসে এখনও কোনো খরচ সেভ করা হয়নি।",
+    deleteItem: "আইটেম মুছবেন?",
+    deleteMonthItem: "এই এন্ট্রিটি মাস থেকে মুছে যাবে।",
+    deleteSavingsItem: "এই সঞ্চয় আইটেমটি মুছে যাবে।",
+    deleteLedgerItem: "এই লেজার আইটেমটি মুছে যাবে।",
+    delete: "মুছুন",
+    removeGroup: "গ্রুপ মুছবেন?",
+    alreadyThere: "আগেই আছে",
+    groupExists: "এই গ্রুপটি আগে থেকেই আছে।",
+    rename: "নাম বদলান",
+    accountName: "অ্যাকাউন্টের নাম",
+    personName: "ব্যক্তির নাম",
+    renameAccount: "অ্যাকাউন্টের নাম বদলান",
+    renamePerson: "ব্যক্তির নাম বদলান",
+    deleteAccount: "অ্যাকাউন্ট মুছবেন?",
+    deleteAccountBody: "এই সঞ্চয় অ্যাকাউন্ট এবং এর সব এন্ট্রি মুছে যাবে।",
+    deletePerson: "ব্যক্তিকে মুছবেন?",
+    deletePersonBody: "এই ব্যক্তি এবং সংশ্লিষ্ট সব এন্ট্রি মুছে যাবে।",
+    missingDetails: "তথ্য অসম্পূর্ণ",
+    addNameAmount: "নাম ও পরিমাণ দিন।",
+    pickAccountNameAmount: "অ্যাকাউন্ট বাছাই করে নাম ও পরিমাণ দিন।",
+    pickPersonNameAmount: "ব্যক্তি বাছাই করে নাম ও পরিমাণ দিন।",
+    saveIssue: "সেভ সমস্যা",
+    saveIssueBody: "এই মুহূর্তে সর্বশেষ পরিবর্তন সেভ করা যায়নি।",
+    preparingBook: "আপনার হিসাব বই প্রস্তুত হচ্ছে...",
+  },
+};
 
 const initialEntryForm = (): EntryFormState => ({
   name: "",
@@ -134,9 +381,10 @@ export default function App() {
   const [data, setData] = useState<AppData>(emptyData);
   const [isReady, setIsReady] = useState(false);
   const [isBackupBusy, setIsBackupBusy] = useState(false);
-  const [lastBackupLabel, setLastBackupLabel] = useState(
-    "Create a JSON backup file and save it anywhere you like.",
-  );
+  const [lastBackupInfo, setLastBackupInfo] = useState<{
+    kind: "idle" | "backup" | "restore";
+    value?: string;
+  }>({ kind: "idle" });
 
   const [monthModalVisible, setMonthModalVisible] = useState(false);
   const [entryModalVisible, setEntryModalVisible] = useState(false);
@@ -153,12 +401,32 @@ export default function App() {
   const [personMode, setPersonMode] = useState<"borrowed" | "repaid">("borrowed");
   const [personForm, setPersonForm] = useState<PersonFormState>(initialPersonForm());
   const [personNameDraft, setPersonNameDraft] = useState("");
+  const [renameTarget, setRenameTarget] = useState<RenameTarget>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   const [groupDraft, setGroupDraft] = useState("");
   const [monthlyExpanded, setMonthlyExpanded] = useState({
     debits: true,
     credits: true,
   });
+  const language = data.language;
+  const text = COPY[language];
+  const t = (key: string) => text[key] ?? key;
+
+  function displayGroupName(name?: string) {
+    const group = name?.trim() || DEFAULT_GROUP;
+    if (group === DEFAULT_GROUP && language === "bn") {
+      return "অন্যান্য";
+    }
+    return group;
+  }
+
+  const lastBackupLabel =
+    lastBackupInfo.kind === "backup" && lastBackupInfo.value
+      ? `${language === "bn" ? "সর্বশেষ ব্যাকআপ:" : "Last backup:"} ${lastBackupInfo.value}`
+      : lastBackupInfo.kind === "restore" && lastBackupInfo.value
+        ? `${language === "bn" ? "যে ফাইল থেকে রিস্টোর:" : "Restored from:"} ${lastBackupInfo.value}`
+        : t("backupIdle");
 
   useEffect(() => {
     loadAppData()
@@ -172,7 +440,7 @@ export default function App() {
     }
 
     saveAppData(data).catch(() => {
-      Alert.alert("Save issue", "Your latest changes could not be written right now.");
+      Alert.alert(t("saveIssue"), t("saveIssueBody"));
     });
   }, [data, isReady]);
 
@@ -184,7 +452,7 @@ export default function App() {
   const monthCreditTotal = sumAmounts(currentMonth.credits);
   const monthBalance = monthDebitTotal - monthCreditTotal;
   const totalSavings = data.savings.reduce(
-    (total, account) => total + sumAmounts(account.credits) - sumAmounts(account.debits),
+    (total, account) => total + sumAmounts(account.debits) - sumAmounts(account.credits),
     0,
   );
   const totalLoan = data.loans.reduce(
@@ -233,7 +501,7 @@ export default function App() {
 
   function saveMonthlyEntry() {
     if (!entryForm.name.trim() || !entryForm.amount.trim()) {
-      Alert.alert("Missing details", "Please add a name and amount.");
+      Alert.alert(t("missingDetails"), t("addNameAmount"));
       return;
     }
 
@@ -260,10 +528,10 @@ export default function App() {
   }
 
   function deleteMonthlyEntry(kind: "credit" | "debit", id: string) {
-    Alert.alert("Delete item?", "This entry will be removed from the month.", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("deleteItem"), t("deleteMonthItem"), [
+      { text: t("cancel"), style: "cancel" },
       {
-        text: "Delete",
+        text: t("delete"),
         style: "destructive",
         onPress: () =>
           updateData((current) => {
@@ -315,6 +583,26 @@ export default function App() {
     setAccountNameDraft("");
   }
 
+  function openRenameSavingsAccount(account: SavingsAccount) {
+    setRenameTarget({ type: "savings", id: account.id, value: account.name });
+    setRenameValue(account.name);
+  }
+
+  function deleteSavingsAccount(accountId: string) {
+    Alert.alert(t("deleteAccount"), t("deleteAccountBody"), [
+      { text: t("cancel"), style: "cancel" },
+      {
+        text: t("delete"),
+        style: "destructive",
+        onPress: () =>
+          updateData((current) => ({
+            ...current,
+            savings: current.savings.filter((account) => account.id !== accountId),
+          })),
+      },
+    ]);
+  }
+
   function openSavingsModal(kind: "credit" | "debit", accountId: string, item?: MonthlyEntry) {
     setSavingsKind(kind);
     setSavingsForm(
@@ -336,7 +624,7 @@ export default function App() {
 
   function saveSavingsEntry() {
     if (!savingsForm.accountId || !savingsForm.name.trim() || !savingsForm.amount.trim()) {
-      Alert.alert("Missing details", "Pick an account and add a name and amount.");
+      Alert.alert(t("missingDetails"), t("pickAccountNameAmount"));
       return;
     }
 
@@ -361,10 +649,10 @@ export default function App() {
   }
 
   function deleteSavingsEntry(kind: "credit" | "debit", accountId: string, entryId: string) {
-    Alert.alert("Delete item?", "This savings item will be removed.", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("deleteItem"), t("deleteSavingsItem"), [
+      { text: t("cancel"), style: "cancel" },
       {
-        text: "Delete",
+        text: t("delete"),
         style: "destructive",
         onPress: () =>
           updateData((current) => ({
@@ -408,6 +696,26 @@ export default function App() {
     setPersonNameDraft("");
   }
 
+  function openRenamePerson(type: "loans" | "lending", person: PersonLedger) {
+    setRenameTarget({ type, id: person.id, value: person.person });
+    setRenameValue(person.person);
+  }
+
+  function deletePerson(type: "loans" | "lending", personId: string) {
+    Alert.alert(t("deletePerson"), t("deletePersonBody"), [
+      { text: t("cancel"), style: "cancel" },
+      {
+        text: t("delete"),
+        style: "destructive",
+        onPress: () =>
+          updateData((current) => ({
+            ...current,
+            [type]: current[type].filter((person) => person.id !== personId),
+          })),
+      },
+    ]);
+  }
+
   function openPersonModal(
     type: "loans" | "lending",
     mode: "borrowed" | "repaid",
@@ -435,7 +743,7 @@ export default function App() {
 
   function savePersonEntry(type: "loans" | "lending") {
     if (!personForm.personId || !personForm.name.trim() || !personForm.amount.trim()) {
-      Alert.alert("Missing details", "Pick a person and add a name and amount.");
+      Alert.alert(t("missingDetails"), t("pickPersonNameAmount"));
       return;
     }
 
@@ -462,10 +770,10 @@ export default function App() {
     personId: string,
     entryId: string,
   ) {
-    Alert.alert("Delete item?", "This ledger item will be removed.", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("deleteItem"), t("deleteLedgerItem"), [
+      { text: t("cancel"), style: "cancel" },
       {
-        text: "Delete",
+        text: t("delete"),
         style: "destructive",
         onPress: () =>
           updateData((current) => ({
@@ -497,7 +805,7 @@ export default function App() {
     );
 
     if (exists || name.toLowerCase() === DEFAULT_GROUP.toLowerCase()) {
-      Alert.alert("Already there", "This group already exists.");
+      Alert.alert(t("alreadyThere"), t("groupExists"));
       return;
     }
 
@@ -510,12 +818,12 @@ export default function App() {
 
   function removeGroup(groupName: string) {
     Alert.alert(
-      "Remove group?",
+      t("removeGroup"),
       `Entries in ${groupName} will move to ${DEFAULT_GROUP}.`,
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("cancel"), style: "cancel" },
         {
-          text: "Remove",
+          text: t("delete"),
           style: "destructive",
           onPress: () =>
             updateData((current) => {
@@ -545,15 +853,44 @@ export default function App() {
     );
   }
 
+  function saveRename() {
+    const nextValue = renameValue.trim();
+
+    if (!renameTarget || !nextValue) {
+      return;
+    }
+
+    updateData((current) => {
+      if (renameTarget.type === "savings") {
+        return {
+          ...current,
+          savings: current.savings.map((account) =>
+            account.id === renameTarget.id ? { ...account, name: nextValue } : account,
+          ),
+        };
+      }
+
+      return {
+        ...current,
+        [renameTarget.type]: current[renameTarget.type].map((person) =>
+          person.id === renameTarget.id ? { ...person, person: nextValue } : person,
+        ),
+      };
+    });
+
+    setRenameTarget(null);
+    setRenameValue("");
+  }
+
   async function backupNow() {
     try {
       setIsBackupBusy(true);
       await shareBackupFile(data);
       const savedAt = new Date().toLocaleString();
-      setLastBackupLabel(`Last backup: ${savedAt}`);
-      Alert.alert("Backup ready", "Your JSON backup file is ready to save or share.");
+      setLastBackupInfo({ kind: "backup", value: savedAt });
+      Alert.alert(t("backupReady"), t("backupReadyMessage"));
     } catch {
-      Alert.alert("Backup failed", "The JSON backup file could not be created.");
+      Alert.alert(t("backupFailed"), t("backupFailedMessage"));
     } finally {
       setIsBackupBusy(false);
     }
@@ -569,23 +906,23 @@ export default function App() {
       }
 
       Alert.alert(
-        "Restore backup?",
+        t("restoreAsk"),
         `This will replace the current local data with ${selected.fileName}.`,
         [
-          { text: "Cancel", style: "cancel" },
+          { text: t("cancel"), style: "cancel" },
           {
-            text: "Restore",
+            text: t("restore"),
             style: "destructive",
             onPress: () => {
               setData(selected.data);
-              setLastBackupLabel(`Restored from: ${selected.fileName}`);
-              Alert.alert("Restore complete", "The JSON backup has been restored to this device.");
+              setLastBackupInfo({ kind: "restore", value: selected.fileName });
+              Alert.alert(t("restoreComplete"), t("restoreCompleteMessage"));
             },
           },
         ],
       );
     } catch {
-      Alert.alert("Restore failed", "The selected JSON backup file could not be restored.");
+      Alert.alert(t("restoreFailed"), t("restoreFailedMessage"));
     } finally {
       setIsBackupBusy(false);
     }
@@ -597,7 +934,7 @@ export default function App() {
     return (
       <SafeAreaView style={styles.loadingScreen}>
         <ActivityIndicator size="large" color="#17494d" />
-        <Text style={styles.loadingText}>Preparing your budget book...</Text>
+        <Text style={styles.loadingText}>{t("preparingBook")}</Text>
       </SafeAreaView>
     );
   }
@@ -623,9 +960,11 @@ export default function App() {
                 <Text style={styles.monthArrowText}>‹</Text>
               </Pressable>
               <Pressable style={styles.monthCenter} onPress={() => setMonthModalVisible(true)}>
-                <Text style={styles.monthTitle}>{formatMonthLabel(currentMonthKey)}</Text>
+                <Text style={styles.monthTitle}>{formatMonthLabel(currentMonthKey, language)}</Text>
                 <Text style={styles.monthHint}>
-                  {currentMonth.debits.length} income • {currentMonth.credits.length} expense
+                  {language === "bn"
+                    ? `${currentMonth.debits.length} আয় • ${currentMonth.credits.length} খরচ`
+                    : `${currentMonth.debits.length} income • ${currentMonth.credits.length} expense`}
                 </Text>
               </Pressable>
               <Pressable
@@ -637,22 +976,22 @@ export default function App() {
             </View>
 
             <View style={styles.summaryGrid}>
-              <BalanceCard title="Debits / Income" amount={formatCurrency(monthDebitTotal)} />
-              <BalanceCard title="Credits / Expenses" amount={formatCurrency(monthCreditTotal)} />
-              <BalanceCard title="Left This Month" amount={formatCurrency(monthBalance)} wide />
+              <BalanceCard title={t("debitIncome")} amount={formatCurrency(monthDebitTotal)} />
+              <BalanceCard title={t("creditExpense")} amount={formatCurrency(monthCreditTotal)} />
+              <BalanceCard title={t("leftThisMonth")} amount={formatCurrency(monthBalance)} wide />
             </View>
 
             <View style={styles.actionRow}>
               <LargeActionButton
-                title="Add Debit"
-                subtitle="Income or money in"
+                title={t("addDebit")}
+                subtitle={t("incomeMoneyIn")}
                 color="#1e706b"
                 icon="arrow-down-bold-circle-outline"
                 onPress={() => openMonthlyModal("debit")}
               />
               <LargeActionButton
-                title="Add Credit"
-                subtitle="Expense or money out"
+                title={t("addCredit")}
+                subtitle={t("expenseMoneyOut")}
                 color="#bf5c39"
                 icon="arrow-up-bold-circle-outline"
                 onPress={() => openMonthlyModal("credit")}
@@ -660,8 +999,8 @@ export default function App() {
             </View>
 
             <EntrySection
-              title="Debits / Income"
-              emptyText="No income saved for this month yet."
+              title={t("debitIncome")}
+              emptyText={t("noIncomeSaved")}
               items={currentMonth.debits}
               accent="#1e706b"
               icon="arrow-down-bold-circle-outline"
@@ -677,11 +1016,14 @@ export default function App() {
               onEdit={(item) => openMonthlyModal("debit", item)}
               onDelete={(item) => deleteMonthlyEntry("debit", item.id)}
               showGroups
+              formatGroupLabel={displayGroupName}
+              itemWord={language === "bn" ? "টি" : "items"}
+              language={language}
             />
 
             <EntrySection
-              title="Credits / Expenses"
-              emptyText="No expenses saved for this month yet."
+              title={t("creditExpense")}
+              emptyText={t("noExpensesSaved")}
               items={currentMonth.credits}
               accent="#bf5c39"
               icon="arrow-up-bold-circle-outline"
@@ -697,22 +1039,27 @@ export default function App() {
               onEdit={(item) => openMonthlyModal("credit", item)}
               onDelete={(item) => deleteMonthlyEntry("credit", item.id)}
               showGroups
+              formatGroupLabel={displayGroupName}
+              itemWord={language === "bn" ? "টি" : "items"}
+              language={language}
             />
 
             <View style={styles.card}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.cardTitle}>Insights</Text>
+                <Text style={styles.cardTitle}>{t("insights")}</Text>
                 <MaterialCommunityIcons name="chart-arc" size={18} color="#17494d" />
               </View>
               <Text style={styles.insightText}>
                 {highestExpenseGroup
-                  ? `Highest expense this month by group: ${highestExpenseGroup.group} (${formatCurrency(highestExpenseGroup.amount)}).`
-                  : "Add expense items to see group insights."}
+                  ? language === "bn"
+                    ? `এই মাসে গ্রুপভিত্তিক সর্বোচ্চ খরচ: ${displayGroupName(highestExpenseGroup.group)} (${formatCurrency(highestExpenseGroup.amount)})।`
+                    : `Highest expense this month by group: ${displayGroupName(highestExpenseGroup.group)} (${formatCurrency(highestExpenseGroup.amount)}).`
+                  : t("addExpenseInsight")}
               </Text>
               {expenseGroups.slice(0, 4).map((item) => (
                 <GroupBar
                   key={item.group}
-                  label={item.group}
+                  label={displayGroupName(item.group)}
                   amount={item.amount}
                   maxAmount={expenseGroups[0]?.amount ?? 1}
                 />
@@ -724,7 +1071,7 @@ export default function App() {
         {activeTab === "savings" && (
           <>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Savings</Text>
+              <Text style={styles.sectionTitle}>{t("savingsTitle")}</Text>
               <Text style={styles.sectionAmount}>{formatCurrency(totalSavings)}</Text>
             </View>
 
@@ -732,17 +1079,17 @@ export default function App() {
               <TextInput
                 value={accountNameDraft}
                 onChangeText={setAccountNameDraft}
-                placeholder="Add savings account"
+                placeholder={t("addSavingsAccount")}
                 placeholderTextColor="#7d786f"
                 style={styles.input}
               />
               <Pressable style={styles.inlineButton} onPress={addSavingsAccount}>
-                <Text style={styles.inlineButtonText}>Create</Text>
+                <Text style={styles.inlineButtonText}>{t("create")}</Text>
               </Pressable>
             </View>
 
             {data.savings.length === 0 ? (
-              <EmptyCard text="Create your first savings account to start tracking bank, cash, or other savings." />
+              <EmptyCard text={t("savingsEmpty")} />
             ) : (
               data.savings.map((account) => (
                 <SavingsCard
@@ -752,6 +1099,10 @@ export default function App() {
                   onAddDebit={() => openSavingsModal("debit", account.id)}
                   onEdit={(kind, item) => openSavingsModal(kind, account.id, item)}
                   onDelete={(kind, itemId) => deleteSavingsEntry(kind, account.id, itemId)}
+                  onRename={() => openRenameSavingsAccount(account)}
+                  onDeleteAccount={() => deleteSavingsAccount(account.id)}
+                  language={language}
+                  t={t}
                 />
               ))
             )}
@@ -760,81 +1111,90 @@ export default function App() {
 
         {activeTab === "loans" && (
           <PeopleLedgerView
-            title="Loans"
-            totalLabel="Outstanding Loan"
+            title={t("loansTitle")}
+            totalLabel={t("outstandingLoan")}
             totalAmount={totalLoan}
-            placeholder="Add person you borrowed from"
-            emptyText="Loans are optional, but you can track them here whenever you need."
+            placeholder={t("addBorrowedFrom")}
+            emptyText={t("loansEmpty")}
             people={data.loans}
             personDraft={personNameDraft}
             setPersonDraft={setPersonNameDraft}
             onCreate={() => addPerson("loans")}
             onAddPrimary={(id) => openPersonModal("loans", "borrowed", id)}
             onAddSecondary={(id) => openPersonModal("loans", "repaid", id)}
-            primaryLabel="Add Loan"
-            secondaryLabel="Add Repayment"
+            primaryLabel={t("addLoan")}
+            secondaryLabel={t("addRepayment")}
             onEdit={(mode, personId, item) => openPersonModal("loans", mode, personId, item)}
             onDelete={(mode, personId, itemId) =>
               deletePersonEntry("loans", mode, personId, itemId)
             }
+            onRenamePerson={(person) => openRenamePerson("loans", person)}
+            onDeletePerson={(personId) => deletePerson("loans", personId)}
+            t={t}
+            itemWord={language === "bn" ? "টি" : "items"}
+            language={language}
           />
         )}
 
         {activeTab === "lending" && (
           <PeopleLedgerView
-            title="Lending"
-            totalLabel="Outstanding Lending"
+            title={t("lendingTitle")}
+            totalLabel={t("outstandingLending")}
             totalAmount={totalLending}
-            placeholder="Add person you lent to"
-            emptyText="Lending is optional too, and works the same simple way."
+            placeholder={t("addLentTo")}
+            emptyText={t("lendingEmpty")}
             people={data.lending}
             personDraft={personNameDraft}
             setPersonDraft={setPersonNameDraft}
             onCreate={() => addPerson("lending")}
             onAddPrimary={(id) => openPersonModal("lending", "borrowed", id)}
             onAddSecondary={(id) => openPersonModal("lending", "repaid", id)}
-            primaryLabel="Add Lent Amount"
-            secondaryLabel="Add Returned Amount"
+            primaryLabel={t("addLentAmount")}
+            secondaryLabel={t("addReturnedAmount")}
             onEdit={(mode, personId, item) => openPersonModal("lending", mode, personId, item)}
             onDelete={(mode, personId, itemId) =>
               deletePersonEntry("lending", mode, personId, itemId)
             }
+            onRenamePerson={(person) => openRenamePerson("lending", person)}
+            onDeletePerson={(personId) => deletePerson("lending", personId)}
+            t={t}
+            itemWord={language === "bn" ? "টি" : "items"}
+            language={language}
           />
         )}
 
         {activeTab === "settings" && (
           <>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Settings</Text>
+              <Text style={styles.sectionTitle}>{t("settingsTitle")}</Text>
               <MaterialCommunityIcons name="cog-outline" size={22} color="#17494d" />
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Groups</Text>
-              <Text style={styles.settingsHelp}>
-                Use groups to organize monthly debit and credit items. Entries without a group stay in {DEFAULT_GROUP}.
-              </Text>
+              <Text style={styles.cardTitle}>{t("groupsTitle")}</Text>
+              <Text style={styles.settingsHelp}>{t("groupHelp")}</Text>
               <View style={styles.inlineCreator}>
                 <TextInput
                   value={groupDraft}
                   onChangeText={setGroupDraft}
-                  placeholder="Add a new group"
+                  placeholder={t("addNewGroup")}
                   placeholderTextColor="#7d786f"
                   style={styles.input}
                 />
                 <Pressable style={styles.inlineButton} onPress={addGroup}>
-                  <Text style={styles.inlineButtonText}>Add</Text>
+                  <Text style={styles.inlineButtonText}>{t("add")}</Text>
                 </Pressable>
               </View>
               <View style={styles.groupList}>
                 <GroupSettingsRow
-                  label={DEFAULT_GROUP}
+                  label={displayGroupName(DEFAULT_GROUP)}
                   fixed
+                  fixedLabel={t("defaultLabel")}
                 />
                 {data.groups.map((group) => (
                   <GroupSettingsRow
                     key={group}
-                    label={group}
+                    label={displayGroupName(group)}
                     onRemove={() => removeGroup(group)}
                   />
                 ))}
@@ -842,10 +1202,8 @@ export default function App() {
             </View>
 
             <View style={styles.exportCard}>
-              <Text style={styles.exportTitle}>Backup</Text>
-              <Text style={styles.exportText}>
-                Create a JSON backup file and save it anywhere you want. Later, pick that file to restore your data.
-              </Text>
+              <Text style={styles.exportTitle}>{t("backupTitle")}</Text>
+              <Text style={styles.exportText}>{t("backupText")}</Text>
               <Text style={styles.backupStatusText}>{lastBackupLabel}</Text>
               <View style={styles.actionRow}>
                 <Pressable
@@ -855,7 +1213,7 @@ export default function App() {
                 >
                   <MaterialCommunityIcons name="content-save-outline" size={18} color="#fff8ef" />
                   <Text style={styles.backupActionButtonText}>
-                    {isBackupBusy ? "Working..." : "Back Up Now"}
+                    {isBackupBusy ? (language === "bn" ? "চলছে..." : "Working...") : t("backupNow")}
                   </Text>
                 </Pressable>
                 <Pressable
@@ -864,7 +1222,7 @@ export default function App() {
                   disabled={isBackupBusy}
                 >
                   <MaterialCommunityIcons name="file-restore-outline" size={18} color="#17494d" />
-                  <Text style={styles.backupActionButtonSecondaryText}>Restore Backup</Text>
+                  <Text style={styles.backupActionButtonSecondaryText}>{t("restoreBackup")}</Text>
                 </Pressable>
               </View>
             </View>
@@ -875,49 +1233,88 @@ export default function App() {
       <SideMenu
         visible={menuVisible}
         activeTab={activeTab}
+        language={language}
+        navItems={NAV_ITEMS.map((item) => ({
+          ...item,
+          label: t(item.labelKey),
+        }))}
         onClose={() => setMenuVisible(false)}
         onSelect={(tab) => {
           setActiveTab(tab);
           setMenuVisible(false);
         }}
+        onLanguageChange={(nextLanguage) =>
+          updateData((current) => ({
+            ...current,
+            language: nextLanguage,
+          }))
+        }
+        t={t}
       />
 
       <MonthPickerModal
         visible={monthModalVisible}
         selectedMonthKey={currentMonthKey}
+        language={language}
+        title={t("jumpToMonth")}
         onSelect={(monthKey) => {
           setCurrentMonthKey(monthKey);
           setMonthModalVisible(false);
         }}
         onClose={() => setMonthModalVisible(false)}
+        closeLabel={t("close")}
       />
 
       <EntryModal
         visible={entryModalVisible}
-        title={entryKind === "debit" ? "Debit / Income" : "Credit / Expense"}
+        title={entryKind === "debit" ? t("debitIncomeModal") : t("creditExpenseModal")}
         form={entryForm}
         setForm={setEntryForm}
         onClose={() => setEntryModalVisible(false)}
         onSave={saveMonthlyEntry}
         groups={[DEFAULT_GROUP, ...data.groups]}
+        language={language}
+        t={t}
+        formatGroupLabel={displayGroupName}
       />
 
       <EntryModal
         visible={savingsModalVisible}
-        title={savingsKind === "credit" ? "Savings Credit" : "Savings Debit"}
+        title={savingsKind === "credit" ? t("savingsCreditModal") : t("savingsDebitModal")}
         form={savingsForm}
         setForm={setSavingsForm}
         onClose={() => setSavingsModalVisible(false)}
         onSave={saveSavingsEntry}
+        language={language}
+        t={t}
       />
 
       <EntryModal
         visible={personModalVisible}
-        title={personMode === "borrowed" ? "Amount" : "Repayment"}
+        title={personMode === "borrowed" ? t("amountModal") : t("repaymentModal")}
         form={personForm}
         setForm={setPersonForm}
         onClose={() => setPersonModalVisible(false)}
         onSave={() => savePersonEntry(personLedgerType)}
+        language={language}
+        t={t}
+      />
+
+      <RenameModal
+        visible={Boolean(renameTarget)}
+        title={
+          renameTarget?.type === "savings" ? t("renameAccount") : t("renamePerson")
+        }
+        label={renameTarget?.type === "savings" ? t("accountName") : t("personName")}
+        value={renameValue}
+        onChangeValue={setRenameValue}
+        onClose={() => {
+          setRenameTarget(null);
+          setRenameValue("");
+        }}
+        onSave={saveRename}
+        saveLabel={t("save")}
+        cancelLabel={t("cancel")}
       />
     </SafeAreaView>
   );
@@ -975,6 +1372,9 @@ function EntrySection({
   onEdit,
   onDelete,
   showGroups,
+  formatGroupLabel,
+  itemWord,
+  language,
 }: {
   title: string;
   emptyText: string;
@@ -988,6 +1388,9 @@ function EntrySection({
   onEdit: (item: MonthlyEntry) => void;
   onDelete: (item: MonthlyEntry) => void;
   showGroups?: boolean;
+  formatGroupLabel?: (group?: string) => string;
+  itemWord?: string;
+  language: AppLanguage;
 }) {
   return (
     <View style={styles.card}>
@@ -997,7 +1400,9 @@ function EntrySection({
           <Text style={styles.cardTitle}>{title}</Text>
         </View>
         <View style={styles.entrySectionSummary}>
-          <Text style={styles.entrySectionMeta}>{itemCount} items</Text>
+          <Text style={styles.entrySectionMeta}>
+            {itemCount} {itemWord ?? "items"}
+          </Text>
           <Text style={styles.entrySectionTotal}>{formatCurrency(total)}</Text>
           <MaterialCommunityIcons
             name={expanded ? "chevron-up" : "chevron-down"}
@@ -1026,10 +1431,14 @@ function EntrySection({
               <View style={styles.entryMetaWrap}>
                 {showGroups ? (
                   <View style={styles.groupBadge}>
-                    <Text style={styles.groupBadgeText}>{groupNameOf(item)}</Text>
+                    <Text style={styles.groupBadgeText}>
+                      {formatGroupLabel ? formatGroupLabel(groupNameOf(item)) : groupNameOf(item)}
+                    </Text>
                   </View>
                 ) : null}
-                {item.date ? <Text style={styles.entryMeta}>{item.date}</Text> : null}
+                {item.date ? (
+                  <Text style={styles.entryMeta}>{formatDateLabel(item.date, language)}</Text>
+                ) : null}
               </View>
               <View style={styles.entryActions}>
                 <Pressable style={styles.iconActionButton} onPress={() => onEdit(item)}>
@@ -1057,68 +1466,67 @@ function SavingsCard({
   onAddDebit,
   onEdit,
   onDelete,
+  onRename,
+  onDeleteAccount,
+  language,
+  t,
 }: {
   account: SavingsAccount;
   onAddCredit: () => void;
   onAddDebit: () => void;
   onEdit: (kind: "credit" | "debit", item: MonthlyEntry) => void;
   onDelete: (kind: "credit" | "debit", itemId: string) => void;
+  onRename: () => void;
+  onDeleteAccount: () => void;
+  language: AppLanguage;
+  t: (key: string) => string;
 }) {
   const [expanded, setExpanded] = useState({
-    credits: true,
-    debits: false,
+    debits: true,
+    credits: false,
   });
-  const total = sumAmounts(account.credits) - sumAmounts(account.debits);
+  const total = sumAmounts(account.debits) - sumAmounts(account.credits);
 
   return (
     <View style={styles.card}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.cardTitle}>{account.name}</Text>
-        <Text style={styles.sectionAmount}>{formatCurrency(total)}</Text>
+        <View style={styles.headerMainWrap}>
+          <Text style={styles.cardTitle}>{account.name}</Text>
+          <Text style={styles.sectionAmount}>{formatCurrency(total)}</Text>
+        </View>
+        <View style={styles.subtleHeaderActions}>
+          <Pressable style={styles.subtleHeaderButton} onPress={onRename}>
+            <MaterialCommunityIcons name="pencil-outline" size={15} color="#7a746b" />
+          </Pressable>
+          <Pressable style={styles.subtleHeaderButton} onPress={onDeleteAccount}>
+            <MaterialCommunityIcons name="trash-can-outline" size={15} color="#7a746b" />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.actionRow}>
         <LargeActionButton
-          title="Add Credit"
-          subtitle="Save money"
+          title={t("addDebit")}
+          subtitle={t("savingsAddMoney")}
           color="#1e706b"
           icon="plus-circle-outline"
-          onPress={onAddCredit}
+          onPress={onAddDebit}
         />
         <LargeActionButton
-          title="Add Debit"
-          subtitle="Withdraw money"
+          title={t("addCredit")}
+          subtitle={t("savingsWithdrawMoney")}
           color="#bf5c39"
           icon="minus-circle-outline"
-          onPress={onAddDebit}
+          onPress={onAddCredit}
         />
       </View>
 
       <EntrySection
-        title="Credits"
-        emptyText="No savings added yet."
-        items={account.credits}
+        title={t("savingsDebitTitle")}
+        emptyText={t("savingsNoAdded")}
+        items={account.debits}
         accent="#1e706b"
         icon="plus-circle-outline"
-        total={sumAmounts(account.credits)}
-        itemCount={account.credits.length}
-        expanded={expanded.credits}
-        onToggle={() =>
-          setExpanded((current) => ({
-            ...current,
-            credits: !current.credits,
-          }))
-        }
-        onEdit={(item) => onEdit("credit", item)}
-        onDelete={(item) => onDelete("credit", item.id)}
-      />
-
-      <EntrySection
-        title="Debits"
-        emptyText="No withdrawals yet."
-        items={account.debits}
-        accent="#bf5c39"
-        icon="minus-circle-outline"
         total={sumAmounts(account.debits)}
         itemCount={account.debits.length}
         expanded={expanded.debits}
@@ -1130,6 +1538,29 @@ function SavingsCard({
         }
         onEdit={(item) => onEdit("debit", item)}
         onDelete={(item) => onDelete("debit", item.id)}
+        itemWord={language === "bn" ? "টি" : "items"}
+        language={language}
+      />
+
+      <EntrySection
+        title={t("savingsCreditTitle")}
+        emptyText={t("savingsNoWithdrawals")}
+        items={account.credits}
+        accent="#bf5c39"
+        icon="minus-circle-outline"
+        total={sumAmounts(account.credits)}
+        itemCount={account.credits.length}
+        expanded={expanded.credits}
+        onToggle={() =>
+          setExpanded((current) => ({
+            ...current,
+            credits: !current.credits,
+          }))
+        }
+        onEdit={(item) => onEdit("credit", item)}
+        onDelete={(item) => onDelete("credit", item.id)}
+        itemWord={language === "bn" ? "টি" : "items"}
+        language={language}
       />
     </View>
   );
@@ -1151,6 +1582,11 @@ function PeopleLedgerView({
   secondaryLabel,
   onEdit,
   onDelete,
+  onRenamePerson,
+  onDeletePerson,
+  t,
+  itemWord,
+  language,
 }: {
   title: string;
   totalLabel: string;
@@ -1167,6 +1603,11 @@ function PeopleLedgerView({
   secondaryLabel: string;
   onEdit: (mode: "borrowed" | "repaid", personId: string, item: MonthlyEntry) => void;
   onDelete: (mode: "borrowed" | "repaid", personId: string, itemId: string) => void;
+  onRenamePerson: (person: PersonLedger) => void;
+  onDeletePerson: (personId: string) => void;
+  t: (key: string) => string;
+  itemWord: string;
+  language: AppLanguage;
 }) {
   return (
     <>
@@ -1201,6 +1642,11 @@ function PeopleLedgerView({
             onAddSecondary={() => onAddSecondary(person.id)}
             onEdit={onEdit}
             onDelete={onDelete}
+            onRename={() => onRenamePerson(person)}
+            onDeletePerson={() => onDeletePerson(person.id)}
+            t={t}
+            itemWord={itemWord}
+            language={language}
           />
         ))
       )}
@@ -1216,6 +1662,11 @@ function PeopleLedgerCard({
   onAddSecondary,
   onEdit,
   onDelete,
+  onRename,
+  onDeletePerson,
+  t,
+  itemWord,
+  language,
 }: {
   person: PersonLedger;
   primaryLabel: string;
@@ -1224,6 +1675,11 @@ function PeopleLedgerCard({
   onAddSecondary: () => void;
   onEdit: (mode: "borrowed" | "repaid", personId: string, item: MonthlyEntry) => void;
   onDelete: (mode: "borrowed" | "repaid", personId: string, itemId: string) => void;
+  onRename: () => void;
+  onDeletePerson: () => void;
+  t: (key: string) => string;
+  itemWord: string;
+  language: AppLanguage;
 }) {
   const [expanded, setExpanded] = useState({
     borrowed: true,
@@ -1234,21 +1690,31 @@ function PeopleLedgerCard({
   return (
     <View style={styles.card}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.cardTitle}>{person.person}</Text>
-        <Text style={styles.sectionAmount}>{formatCurrency(outstanding)}</Text>
+        <View style={styles.headerMainWrap}>
+          <Text style={styles.cardTitle}>{person.person}</Text>
+          <Text style={styles.sectionAmount}>{formatCurrency(outstanding)}</Text>
+        </View>
+        <View style={styles.subtleHeaderActions}>
+          <Pressable style={styles.subtleHeaderButton} onPress={onRename}>
+            <MaterialCommunityIcons name="pencil-outline" size={15} color="#7a746b" />
+          </Pressable>
+          <Pressable style={styles.subtleHeaderButton} onPress={onDeletePerson}>
+            <MaterialCommunityIcons name="trash-can-outline" size={15} color="#7a746b" />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.actionRow}>
         <LargeActionButton
           title={primaryLabel}
-          subtitle="Record amount"
+          subtitle={t("recordAmount")}
           color="#1e706b"
           icon="plus-circle-outline"
           onPress={onAddPrimary}
         />
         <LargeActionButton
           title={secondaryLabel}
-          subtitle="Record return"
+          subtitle={t("recordReturn")}
           color="#bf5c39"
           icon="minus-circle-outline"
           onPress={onAddSecondary}
@@ -1256,8 +1722,8 @@ function PeopleLedgerCard({
       </View>
 
       <EntrySection
-        title="Amounts"
-        emptyText="Nothing recorded yet."
+        title={t("amounts")}
+        emptyText={t("nothingRecorded")}
         items={person.borrowed}
         accent="#1e706b"
         icon="plus-circle-outline"
@@ -1272,11 +1738,13 @@ function PeopleLedgerCard({
         }
         onEdit={(item) => onEdit("borrowed", person.id, item)}
         onDelete={(item) => onDelete("borrowed", person.id, item.id)}
+        itemWord={itemWord}
+        language={language}
       />
 
       <EntrySection
-        title="Repayments"
-        emptyText="No repayments yet."
+        title={t("repayments")}
+        emptyText={t("noRepayments")}
         items={person.repaid}
         accent="#bf5c39"
         icon="minus-circle-outline"
@@ -1291,6 +1759,8 @@ function PeopleLedgerCard({
         }
         onEdit={(item) => onEdit("repaid", person.id, item)}
         onDelete={(item) => onDelete("repaid", person.id, item.id)}
+        itemWord={itemWord}
+        language={language}
       />
     </View>
   );
@@ -1334,10 +1804,12 @@ function EmptyCard({ text }: { text: string }) {
 function GroupSettingsRow({
   label,
   fixed,
+  fixedLabel,
   onRemove,
 }: {
   label: string;
   fixed?: boolean;
+  fixedLabel?: string;
   onRemove?: () => void;
 }) {
   return (
@@ -1347,7 +1819,7 @@ function GroupSettingsRow({
         <Text style={styles.groupSettingsLabel}>{label}</Text>
       </View>
       {fixed ? (
-        <Text style={styles.groupFixedText}>Default</Text>
+        <Text style={styles.groupFixedText}>{fixedLabel ?? "Default"}</Text>
       ) : (
         <Pressable style={styles.iconActionButtonGhost} onPress={onRemove}>
           <MaterialCommunityIcons name="trash-can-outline" size={16} color="#9a4b31" />
@@ -1360,13 +1832,21 @@ function GroupSettingsRow({
 function SideMenu({
   visible,
   activeTab,
+  language,
+  navItems,
   onClose,
   onSelect,
+  onLanguageChange,
+  t,
 }: {
   visible: boolean;
   activeTab: TabKey;
+  language: AppLanguage;
+  navItems: Array<{ key: TabKey; label: string; icon: IconName }>;
   onClose: () => void;
   onSelect: (tab: TabKey) => void;
+  onLanguageChange: (language: AppLanguage) => void;
+  t: (key: string) => string;
 }) {
   return (
     <Modal visible={visible} animationType="fade" transparent>
@@ -1374,12 +1854,12 @@ function SideMenu({
         <Pressable style={styles.menuBackdropTouch} onPress={onClose} />
         <View style={styles.menuSheet}>
           <View style={styles.menuHeader}>
-            <Text style={styles.menuTitle}>Menu</Text>
+            <Text style={styles.menuTitle}>{t("menuTitle")}</Text>
             <Pressable style={styles.navButton} onPress={onClose}>
               <MaterialCommunityIcons name="close" size={22} color="#17494d" />
             </Pressable>
           </View>
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <Pressable
               key={item.key}
               style={[
@@ -1403,6 +1883,43 @@ function SideMenu({
               </Text>
             </Pressable>
           ))}
+          <View style={styles.menuLanguageBlock}>
+            <Text style={styles.menuLanguageTitle}>{t("languageTitle")}</Text>
+            <View style={styles.menuLanguageRow}>
+              <Pressable
+                style={[
+                  styles.menuLanguageChip,
+                  language === "en" && styles.menuLanguageChipActive,
+                ]}
+                onPress={() => onLanguageChange("en")}
+              >
+                <Text
+                  style={[
+                    styles.menuLanguageChipText,
+                    language === "en" && styles.menuLanguageChipTextActive,
+                  ]}
+                >
+                  {t("languageEnglish")}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.menuLanguageChip,
+                  language === "bn" && styles.menuLanguageChipActive,
+                ]}
+                onPress={() => onLanguageChange("bn")}
+              >
+                <Text
+                  style={[
+                    styles.menuLanguageChipText,
+                    language === "bn" && styles.menuLanguageChipTextActive,
+                  ]}
+                >
+                  {t("languageBangla")}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
         </View>
       </View>
     </Modal>
@@ -1417,6 +1934,9 @@ function EntryModal<T extends BaseFormState>({
   onClose,
   onSave,
   groups,
+  language,
+  t,
+  formatGroupLabel,
 }: {
   visible: boolean;
   title: string;
@@ -1425,6 +1945,9 @@ function EntryModal<T extends BaseFormState>({
   onClose: () => void;
   onSave: () => void;
   groups?: string[];
+  language: AppLanguage;
+  t: (key: string) => string;
+  formatGroupLabel?: (group?: string) => string;
 }) {
   const amountInputRef = useRef<TextInput>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -1457,22 +1980,22 @@ function EntryModal<T extends BaseFormState>({
             <Text style={styles.modalTitle}>{title}</Text>
           </View>
           <Text style={styles.modalHelperText}>
-            Fill in the item name and amount. Date is optional.
+            {t("fillNameAmount")}
           </Text>
 
-          <Text style={styles.inputLabel}>Name</Text>
+          <Text style={styles.inputLabel}>{t("name")}</Text>
           <TextInput
             autoFocus
             value={form.name}
             onChangeText={(name) => setForm((current) => ({ ...current, name }))}
-            placeholder="For example Salary or Transport"
+            placeholder={t("forExampleSalary")}
             placeholderTextColor="#7d786f"
             style={styles.modalInput}
             returnKeyType="next"
             onSubmitEditing={() => amountInputRef.current?.focus()}
           />
 
-          <Text style={styles.inputLabel}>Amount</Text>
+          <Text style={styles.inputLabel}>{t("amount")}</Text>
           <TextInput
             ref={amountInputRef}
             value={form.amount}
@@ -1487,7 +2010,7 @@ function EntryModal<T extends BaseFormState>({
 
           {groups ? (
             <>
-              <Text style={styles.inputLabel}>Group</Text>
+              <Text style={styles.inputLabel}>{t("group")}</Text>
               <View style={styles.modalGroupWrap}>
                 {groups.map((group) => (
                   <Pressable
@@ -1510,7 +2033,7 @@ function EntryModal<T extends BaseFormState>({
                           styles.modalGroupChipTextActive,
                       ]}
                     >
-                      {group}
+                      {formatGroupLabel ? formatGroupLabel(group) : group}
                     </Text>
                   </Pressable>
                 ))}
@@ -1518,7 +2041,7 @@ function EntryModal<T extends BaseFormState>({
             </>
           ) : null}
 
-          <Text style={styles.inputLabel}>Date</Text>
+          <Text style={styles.inputLabel}>{t("date")}</Text>
           <Pressable
             style={styles.dateButton}
             onPress={() => setShowDatePicker((current) => !current)}
@@ -1530,9 +2053,9 @@ function EntryModal<T extends BaseFormState>({
                 color="#17494d"
               />
               <View>
-                <Text style={styles.dateButtonLabel}>{formatDateLabel(form.date)}</Text>
+                <Text style={styles.dateButtonLabel}>{formatDateLabel(form.date, language)}</Text>
                 <Text style={styles.dateButtonHint}>
-                  {form.date || "Tap to choose a date"}
+                  {form.date ? formatDateLabel(form.date, language) : t("tapToChooseDate")}
                 </Text>
               </View>
             </View>
@@ -1553,7 +2076,7 @@ function EntryModal<T extends BaseFormState>({
                 }))
               }
             >
-              <Text style={styles.dateActionChipText}>Today</Text>
+              <Text style={styles.dateActionChipText}>{t("today")}</Text>
             </Pressable>
             <Pressable
               style={styles.dateActionChip}
@@ -1564,7 +2087,7 @@ function EntryModal<T extends BaseFormState>({
                 }))
               }
             >
-              <Text style={styles.dateActionChipText}>Clear</Text>
+              <Text style={styles.dateActionChipText}>{t("clear")}</Text>
             </Pressable>
           </View>
 
@@ -1581,7 +2104,7 @@ function EntryModal<T extends BaseFormState>({
                   style={styles.pickerDoneButton}
                   onPress={() => setShowDatePicker(false)}
                 >
-                  <Text style={styles.pickerDoneButtonText}>Done</Text>
+                  <Text style={styles.pickerDoneButtonText}>{t("close")}</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -1589,10 +2112,10 @@ function EntryModal<T extends BaseFormState>({
 
           <View style={styles.modalActions}>
             <Pressable style={styles.smallButtonGhost} onPress={onClose}>
-              <Text style={styles.smallButtonGhostText}>Cancel</Text>
+              <Text style={styles.smallButtonGhostText}>{t("cancel")}</Text>
             </Pressable>
             <Pressable style={styles.smallButton} onPress={onSave}>
-              <Text style={styles.smallButtonText}>Save</Text>
+              <Text style={styles.smallButtonText}>{t("save")}</Text>
             </Pressable>
           </View>
         </View>
@@ -1604,21 +2127,30 @@ function EntryModal<T extends BaseFormState>({
 function MonthPickerModal({
   visible,
   selectedMonthKey,
+  language,
+  title,
   onSelect,
   onClose,
+  closeLabel,
 }: {
   visible: boolean;
   selectedMonthKey: string;
+  language: AppLanguage;
+  title: string;
   onSelect: (monthKey: string) => void;
   onClose: () => void;
+  closeLabel: string;
 }) {
-  const options = useMemo(() => getMonthOptions(selectedMonthKey, 24), [selectedMonthKey]);
+  const options = useMemo(
+    () => getMonthOptions(selectedMonthKey, 24, language),
+    [language, selectedMonthKey],
+  );
 
   return (
     <Modal visible={visible} animationType="fade" transparent>
       <View style={styles.modalBackdrop}>
         <View style={styles.monthPickerCard}>
-          <Text style={styles.modalTitle}>Jump to month</Text>
+          <Text style={styles.modalTitle}>{title}</Text>
           <ScrollView>
             {options.map((option) => (
               <Pressable
@@ -1634,10 +2166,61 @@ function MonthPickerModal({
             ))}
           </ScrollView>
           <Pressable style={styles.monthPickerClose} onPress={onClose}>
-            <Text style={styles.monthPickerCloseText}>Close</Text>
+            <Text style={styles.monthPickerCloseText}>{closeLabel}</Text>
           </Pressable>
         </View>
       </View>
+    </Modal>
+  );
+}
+
+function RenameModal({
+  visible,
+  title,
+  label,
+  value,
+  onChangeValue,
+  onClose,
+  onSave,
+  saveLabel,
+  cancelLabel,
+}: {
+  visible: boolean;
+  title: string;
+  label: string;
+  value: string;
+  onChangeValue: (value: string) => void;
+  onClose: () => void;
+  onSave: () => void;
+  saveLabel: string;
+  cancelLabel: string;
+}) {
+  return (
+    <Modal visible={visible} animationType="fade" transparent>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.modalBackdrop}
+      >
+        <View style={styles.renameModalCard}>
+          <Text style={styles.modalTitle}>{title}</Text>
+          <Text style={styles.inputLabel}>{label}</Text>
+          <TextInput
+            autoFocus
+            value={value}
+            onChangeText={onChangeValue}
+            style={styles.modalInput}
+            placeholderTextColor="#7d786f"
+          />
+          <View style={styles.modalActions}>
+            <Pressable style={styles.smallButtonGhost} onPress={onClose}>
+              <Text style={styles.smallButtonGhostText}>{cancelLabel}</Text>
+            </Pressable>
+            <Pressable style={styles.smallButton} onPress={onSave}>
+              <Text style={styles.smallButtonText}>{saveLabel}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -1898,8 +2481,25 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 12,
+  },
+  headerMainWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  subtleHeaderActions: {
+    flexDirection: "row",
+    gap: 4,
+    marginTop: 2,
+  },
+  subtleHeaderButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f4ecdf",
   },
   sectionTitle: {
     fontSize: 20,
@@ -2121,6 +2721,43 @@ const styles = StyleSheet.create({
   menuItemTextActive: {
     color: "#fff8ef",
   },
+  menuLanguageBlock: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#eadfd2",
+    gap: 10,
+  },
+  menuLanguageTitle: {
+    color: "#6b655c",
+    fontSize: 13,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  menuLanguageRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  menuLanguageChip: {
+    flex: 1,
+    borderRadius: 14,
+    backgroundColor: "#f6eee4",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  menuLanguageChipActive: {
+    backgroundColor: "#17494d",
+  },
+  menuLanguageChipText: {
+    color: "#17494d",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  menuLanguageChipTextActive: {
+    color: "#fff8ef",
+  },
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(17, 21, 24, 0.45)",
@@ -2131,6 +2768,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff8ef",
     borderRadius: 28,
     padding: 20,
+    gap: 12,
+  },
+  renameModalCard: {
+    backgroundColor: "#fff8ef",
+    borderRadius: 22,
+    padding: 18,
     gap: 12,
   },
   modalTitleRow: {

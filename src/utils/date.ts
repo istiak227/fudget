@@ -1,13 +1,8 @@
-const monthFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "long",
-  year: "numeric",
-});
+import { AppLanguage } from "../types";
 
-const dateFormatter = new Intl.DateTimeFormat("en-US", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-});
+function getLocale(language: AppLanguage = "en") {
+  return language === "bn" ? "bn-BD" : "en-US";
+}
 
 export function getMonthKey(date: Date) {
   const year = date.getFullYear();
@@ -20,8 +15,11 @@ export function parseMonthKey(monthKey: string) {
   return new Date(year, month - 1, 1);
 }
 
-export function formatMonthLabel(monthKey: string) {
-  return monthFormatter.format(parseMonthKey(monthKey));
+export function formatMonthLabel(monthKey: string, language: AppLanguage = "en") {
+  return new Intl.DateTimeFormat(getLocale(language), {
+    month: "long",
+    year: "numeric",
+  }).format(parseMonthKey(monthKey));
 }
 
 export function offsetMonth(monthKey: string, offset: number) {
@@ -60,19 +58,31 @@ export function parseIsoDate(value?: string) {
   return date;
 }
 
-export function formatDateLabel(value?: string) {
+export function formatDateLabel(value?: string, language: AppLanguage = "en") {
   const parsed = parseIsoDate(value);
-  return parsed ? dateFormatter.format(parsed) : "No date selected";
+  return parsed
+    ? new Intl.DateTimeFormat(getLocale(language), {
+        day: "numeric",
+        month: "short",
+        year: "2-digit",
+      }).format(parsed)
+    : language === "bn"
+      ? "কোনো তারিখ নেই"
+      : "No date selected";
 }
 
-export function getMonthOptions(centerMonthKey: string, radius = 18) {
+export function getMonthOptions(
+  centerMonthKey: string,
+  radius = 18,
+  language: AppLanguage = "en",
+) {
   const items = [];
 
   for (let offset = -radius; offset <= radius; offset += 1) {
     const monthKey = offsetMonth(centerMonthKey, offset);
     items.push({
       monthKey,
-      label: formatMonthLabel(monthKey),
+      label: formatMonthLabel(monthKey, language),
     });
   }
 

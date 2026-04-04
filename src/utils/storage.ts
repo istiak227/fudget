@@ -23,6 +23,7 @@ export const emptyData: AppData = {
   loans: [],
   lending: [],
   groups: EXAMPLE_GROUPS,
+  language: "en",
   updatedAt: new Date().toISOString(),
 };
 

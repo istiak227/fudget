@@ -1,4 +1,5 @@
 export type EntryKind = "credit" | "debit";
+export type AppLanguage = "en" | "bn";
 
 export type MonthlyEntry = {
   id: string;
@@ -44,5 +45,6 @@ export type AppData = {
   loans: PersonLedger[];
   lending: PersonLedger[];
   groups: string[];
+  language: AppLanguage;
   updatedAt: string;
 };
