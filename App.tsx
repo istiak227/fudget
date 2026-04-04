@@ -1,4 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import DateTimePicker, {
+  DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
 import { StatusBar } from "expo-status-bar";
 import {
   ActivityIndicator,
@@ -17,15 +20,21 @@ import {
 } from "react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import {
+  pickBackupFile,
+  shareBackupFile,
+} from "./src/services/backup";
 import { AppData, MonthlyEntry, PersonLedger, SavingsAccount } from "./src/types";
 import {
+  formatDateLabel,
+  formatIsoDate,
   formatMonthLabel,
   getMonthKey,
   getMonthOptions,
   getTodayIso,
   offsetMonth,
+  parseIsoDate,
 } from "./src/utils/date";
-import { exportWorkbook } from "./src/utils/export";
 import { formatCurrency, sumAmounts, toAmount } from "./src/utils/format";
 import {
   DEFAULT_GROUP,
@@ -124,7 +133,10 @@ export default function App() {
   const [currentMonthKey, setCurrentMonthKey] = useState(getMonthKey(new Date()));
   const [data, setData] = useState<AppData>(emptyData);
   const [isReady, setIsReady] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
+  const [isBackupBusy, setIsBackupBusy] = useState(false);
+  const [lastBackupLabel, setLastBackupLabel] = useState(
+    "Create a JSON backup file and save it anywhere you like.",
+  );
 
   const [monthModalVisible, setMonthModalVisible] = useState(false);
   const [entryModalVisible, setEntryModalVisible] = useState(false);
@@ -533,15 +545,49 @@ export default function App() {
     );
   }
 
-  async function onExport() {
+  async function backupNow() {
     try {
-      setIsExporting(true);
-      const uri = await exportWorkbook(data);
-      Alert.alert("Export ready", `Your Excel file is prepared.\n${uri}`);
+      setIsBackupBusy(true);
+      await shareBackupFile(data);
+      const savedAt = new Date().toLocaleString();
+      setLastBackupLabel(`Last backup: ${savedAt}`);
+      Alert.alert("Backup ready", "Your JSON backup file is ready to save or share.");
     } catch {
-      Alert.alert("Export failed", "The Excel file could not be created on this device.");
+      Alert.alert("Backup failed", "The JSON backup file could not be created.");
     } finally {
-      setIsExporting(false);
+      setIsBackupBusy(false);
+    }
+  }
+
+  async function restoreFromFile() {
+    try {
+      setIsBackupBusy(true);
+      const selected = await pickBackupFile();
+
+      if (!selected) {
+        return;
+      }
+
+      Alert.alert(
+        "Restore backup?",
+        `This will replace the current local data with ${selected.fileName}.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Restore",
+            style: "destructive",
+            onPress: () => {
+              setData(selected.data);
+              setLastBackupLabel(`Restored from: ${selected.fileName}`);
+              Alert.alert("Restore complete", "The JSON backup has been restored to this device.");
+            },
+          },
+        ],
+      );
+    } catch {
+      Alert.alert("Restore failed", "The selected JSON backup file could not be restored.");
+    } finally {
+      setIsBackupBusy(false);
     }
   }
 
@@ -796,15 +842,31 @@ export default function App() {
             </View>
 
             <View style={styles.exportCard}>
-              <Text style={styles.exportTitle}>Backup and export</Text>
+              <Text style={styles.exportTitle}>Backup</Text>
               <Text style={styles.exportText}>
-                Your data stays on this device. You can export everything as an Excel file when needed.
+                Create a JSON backup file and save it anywhere you want. Later, pick that file to restore your data.
               </Text>
-              <Pressable style={styles.exportButton} onPress={onExport} disabled={isExporting}>
-                <Text style={styles.exportButtonText}>
-                  {isExporting ? "Preparing file..." : "Export Excel File"}
-                </Text>
-              </Pressable>
+              <Text style={styles.backupStatusText}>{lastBackupLabel}</Text>
+              <View style={styles.actionRow}>
+                <Pressable
+                  style={styles.backupActionButton}
+                  onPress={() => void backupNow()}
+                  disabled={isBackupBusy}
+                >
+                  <MaterialCommunityIcons name="content-save-outline" size={18} color="#fff8ef" />
+                  <Text style={styles.backupActionButtonText}>
+                    {isBackupBusy ? "Working..." : "Back Up Now"}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={styles.backupActionButtonSecondary}
+                  onPress={() => void restoreFromFile()}
+                  disabled={isBackupBusy}
+                >
+                  <MaterialCommunityIcons name="file-restore-outline" size={18} color="#17494d" />
+                  <Text style={styles.backupActionButtonSecondaryText}>Restore Backup</Text>
+                </Pressable>
+              </View>
             </View>
           </>
         )}
@@ -1365,7 +1427,23 @@ function EntryModal<T extends BaseFormState>({
   groups?: string[];
 }) {
   const amountInputRef = useRef<TextInput>(null);
-  const dateInputRef = useRef<TextInput>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const selectedDate = parseIsoDate(form.date) ?? new Date();
+
+  function onDateChange(event: DateTimePickerEvent, nextDate?: Date) {
+    if (Platform.OS === "android") {
+      setShowDatePicker(false);
+    }
+
+    if (event.type === "dismissed" || !nextDate) {
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      date: formatIsoDate(nextDate),
+    }));
+  }
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
@@ -1404,7 +1482,7 @@ function EntryModal<T extends BaseFormState>({
             keyboardType="decimal-pad"
             style={styles.modalInput}
             returnKeyType="next"
-            onSubmitEditing={() => dateInputRef.current?.focus()}
+            onSubmitEditing={() => setShowDatePicker(true)}
           />
 
           {groups ? (
@@ -1441,16 +1519,73 @@ function EntryModal<T extends BaseFormState>({
           ) : null}
 
           <Text style={styles.inputLabel}>Date</Text>
-          <TextInput
-            ref={dateInputRef}
-            value={form.date}
-            onChangeText={(date) => setForm((current) => ({ ...current, date }))}
-            placeholder="Date (optional, YYYY-MM-DD)"
-            placeholderTextColor="#7d786f"
-            style={styles.modalInput}
-            returnKeyType="done"
-            onSubmitEditing={onSave}
-          />
+          <Pressable
+            style={styles.dateButton}
+            onPress={() => setShowDatePicker((current) => !current)}
+          >
+            <View style={styles.dateButtonContent}>
+              <MaterialCommunityIcons
+                name="calendar-month-outline"
+                size={18}
+                color="#17494d"
+              />
+              <View>
+                <Text style={styles.dateButtonLabel}>{formatDateLabel(form.date)}</Text>
+                <Text style={styles.dateButtonHint}>
+                  {form.date || "Tap to choose a date"}
+                </Text>
+              </View>
+            </View>
+            <MaterialCommunityIcons
+              name={showDatePicker ? "chevron-up" : "chevron-down"}
+              size={20}
+              color="#6b655c"
+            />
+          </Pressable>
+
+          <View style={styles.dateActionRow}>
+            <Pressable
+              style={styles.dateActionChip}
+              onPress={() =>
+                setForm((current) => ({
+                  ...current,
+                  date: getTodayIso(),
+                }))
+              }
+            >
+              <Text style={styles.dateActionChipText}>Today</Text>
+            </Pressable>
+            <Pressable
+              style={styles.dateActionChip}
+              onPress={() =>
+                setForm((current) => ({
+                  ...current,
+                  date: "",
+                }))
+              }
+            >
+              <Text style={styles.dateActionChipText}>Clear</Text>
+            </Pressable>
+          </View>
+
+          {showDatePicker ? (
+            <View style={styles.pickerWrap}>
+              <DateTimePicker
+                value={selectedDate}
+                mode="date"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                onChange={onDateChange}
+              />
+              {Platform.OS === "ios" ? (
+                <Pressable
+                  style={styles.pickerDoneButton}
+                  onPress={() => setShowDatePicker(false)}
+                >
+                  <Text style={styles.pickerDoneButtonText}>Done</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
 
           <View style={styles.modalActions}>
             <Pressable style={styles.smallButtonGhost} onPress={onClose}>
@@ -1886,6 +2021,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 21,
   },
+  backupStatusText: {
+    marginTop: 8,
+    color: "#cfe3e0",
+    fontSize: 13,
+    lineHeight: 18,
+  },
   exportButton: {
     marginTop: 16,
     alignSelf: "flex-start",
@@ -1898,6 +2039,40 @@ const styles = StyleSheet.create({
     color: "#fff8ef",
     fontWeight: "800",
     fontSize: 16,
+  },
+  backupActionButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 16,
+    backgroundColor: "#c8774d",
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  backupActionButtonText: {
+    color: "#fff8ef",
+    fontWeight: "800",
+    fontSize: 15,
+  },
+  backupActionButtonSecondary: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 16,
+    backgroundColor: "#f2eadf",
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  backupActionButtonSecondaryText: {
+    color: "#17494d",
+    fontWeight: "800",
+    fontSize: 15,
   },
   menuBackdrop: {
     flex: 1,
@@ -1989,6 +2164,69 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     color: "#1d1a17",
     fontSize: 16,
+  },
+  dateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#dacdbd",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  dateButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  dateButtonLabel: {
+    color: "#1d1a17",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  dateButtonHint: {
+    marginTop: 2,
+    color: "#6b655c",
+    fontSize: 12,
+  },
+  dateActionRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: -2,
+  },
+  dateActionChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#f0e5d8",
+  },
+  dateActionChipText: {
+    color: "#17494d",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  pickerWrap: {
+    borderRadius: 16,
+    backgroundColor: "#f8f1e8",
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+  },
+  pickerDoneButton: {
+    alignSelf: "flex-end",
+    marginTop: 6,
+    marginRight: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: "#17494d",
+  },
+  pickerDoneButtonText: {
+    color: "#fff8ef",
+    fontSize: 12,
+    fontWeight: "700",
   },
   modalGroupWrap: {
     flexDirection: "row",
