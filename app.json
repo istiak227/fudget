@@ -22,13 +22,19 @@
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#f6f2ea"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.istiak.fudgetphone"
     },
     "web": {
       "bundler": "metro"
     },
     "plugins": [
       "@react-native-community/datetimepicker"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "69c1199d-b76a-416c-bbf9-e6e76b6771b7"
+      }
+    }
   }
 }
